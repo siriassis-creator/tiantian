@@ -1,6 +1,6 @@
 // src/OtherApp.tsx
 import React, { useState } from 'react';
-import { ArrowLeft, Play, FileText, ChevronRight, BookOpen } from 'lucide-react';
+import { ArrowLeft, Play, ChevronRight, BookOpen, Bot } from 'lucide-react';
 import Settings2 from './Settings2';
 
 import LessonPattern1 from './components/LessonPattern1';
@@ -75,6 +75,9 @@ import OtherLesson6_15 from './components/Other_lesson6-15';
 import OtherLesson6_16 from './components/Other_lesson6-16';
 import OtherLesson6_17 from './components/Other_lesson6-17';
 import OtherLesson6_18 from './components/Other_lesson6-18';
+
+// +++ Import AI ChatBot ที่เราสร้างไว้ +++
+import ChatBot from './components/ChatBot';
 
 interface OtherAppProps {
   currentView: string;
@@ -184,6 +187,44 @@ export default function OtherApp({
 }: OtherAppProps) {
   
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  
+  // 🎯 AI ChatBot States
+  const [showChatBot, setShowChatBot] = useState(false);
+  const [chatLessonTitle, setChatLessonTitle] = useState('');
+  const [chatLessonContext, setChatLessonContext] = useState('');
+
+  // ฟังก์ชันดึงข้อมูลจากบทเรียนส่งให้ AI
+  const handleOpenChatForLesson = (lesson: any) => {
+    const title = lesson.titleCn ? `บทที่ ${lesson.lessonNumber}: ${lesson.titleCn}` : `บทที่ ${lesson.lessonNumber}`;
+    
+    // ดึงเนื้อหาและคำศัพท์ทั้งหมดในบทนี้มารวมกันเพื่อสอน AI
+    let contextData: string[] = [];
+    lesson.sections.forEach((sec: any) => {
+      // ดึงหัวข้อ
+      const secTitle = sec.mainTitle || sec.titleZh || '';
+      const secSub = sec.subTitle || sec.titleEn || '';
+      let textBlock = `${secTitle} ${secSub}`;
+
+      // ดึงคำศัพท์ถ้ามีในหน้านั้น
+      if (sec.vocabulary && Array.isArray(sec.vocabulary)) {
+        const vocabStr = sec.vocabulary.map((v:any) => `${v.word} (${v.pinyin}) = ${v.translation}`).join(', ');
+        textBlock += ` [คำศัพท์ที่เรียน: ${vocabStr}]`;
+      }
+      
+      // ดึงเนื้อหาบทความถ้ามี
+      if (sec.content) {
+        textBlock += ` [เนื้อหา: ${sec.content}]`;
+      }
+
+      if (textBlock.trim()) {
+        contextData.push(textBlock.trim());
+      }
+    });
+
+    setChatLessonTitle(title);
+    setChatLessonContext(contextData.join(' | ').substring(0, 2000)); // ส่งไปให้ AI ไม่เกิน 2000 ตัวอักษร
+    setShowChatBot(true);
+  };
 
   if (currentView === 'settings_other') {
     return (
@@ -293,16 +334,28 @@ export default function OtherApp({
               <div className="w-full space-y-12">
                 {activeLessons.map((lesson: any, lIdx: number) => (
                   <div key={lesson.id} className="w-full">
-                    <h3 className="text-2xl font-bold text-emerald-700 mb-6 flex items-center gap-3">
-                      <BookOpen size={24} className="text-emerald-500" />
-                      {lesson.titleCn ? `第 ${lesson.lessonNumber} 课: ${lesson.titleCn}` : `บทที่ ${lesson.lessonNumber}`} 
-                      {lesson.titleEn && <span className="text-slate-500 font-normal text-xl">({lesson.titleEn})</span>}
-                    </h3>
+                    
+                    {/* 🎯 Header บทเรียน + ปุ่ม AI */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                      <h3 className="text-2xl font-bold text-emerald-700 flex items-center gap-3">
+                        <BookOpen size={24} className="text-emerald-500" />
+                        {lesson.titleCn ? `第 ${lesson.lessonNumber} 课: ${lesson.titleCn}` : `บทที่ ${lesson.lessonNumber}`} 
+                        {lesson.titleEn && <span className="text-slate-500 font-normal text-xl">({lesson.titleEn})</span>}
+                      </h3>
+                      
+                      {/* ปุ่มเปิดแชทกับ AI โดยส่งข้อมูลของบทนี้ไปทั้งหมด */}
+                      <button
+                        onClick={() => handleOpenChatForLesson(lesson)}
+                        className="flex items-center gap-2 bg-indigo-100 hover:bg-indigo-600 text-indigo-700 hover:text-white px-5 py-2.5 rounded-xl font-bold shadow-sm transition-all active:scale-95"
+                      >
+                        <Bot size={20} /> ทบทวนกับ AI ติวเตอร์
+                      </button>
+                    </div>
                     
                     {/* ลิสต์รายการสารบัญ (Card ยาวๆ แถวละ 1 บท) */}
                     <div className="flex flex-col gap-4">
                       {lesson.sections.map((sec: any, sIdx: number) => {
-                        // 🎯 ดึงหัวข้อหลักและคำอธิบาย (รองรับแบบชุดที่ 1 และ 2)
+                        // 🎯 ดึงข้อมูล Header แบบที่สั่ง: 1.จีน 2.ไทย
                         const title1 = sec.mainTitle || sec.mainTitle1 || sec.titleZh || sec.titleZh1;
                         const title2 = sec.mainTitle2 || sec.titleZh2;
                         const displayTitle = [title1, title2].filter(Boolean).join(' | ') || `เนื้อหาส่วนที่ ${sIdx + 1}`;
@@ -322,9 +375,11 @@ export default function OtherApp({
                                   {sIdx + 1}
                                </div>
                                <div className="flex flex-col">
+                                  {/* บรรทัด 1: หัวข้อหลัก (จีน) */}
                                   <h4 className="text-xl font-bold text-slate-800 mb-1 line-clamp-1 group-hover:text-emerald-700 transition-colors">
                                      {displayTitle}
                                   </h4>
+                                  {/* บรรทัด 2: คำอธิบาย (ไทย) */}
                                   {displaySub && (
                                      <p className="text-sm text-slate-500 line-clamp-1">{displaySub}</p>
                                   )}
@@ -424,6 +479,15 @@ export default function OtherApp({
         {/* === กระดานคำศัพท์เสริม (Floating Board) แสดงทุกหน้าของ OtherApp === */}
         <FloatingLiveText roomPin={roomPin} userRole={userRole} />
         
+        {/* === 🤖 AI ChatBot (จะแสดงเมื่อกดปุ่ม "ทบทวนกับ AI ติวเตอร์") === */}
+        {showChatBot && (
+          <ChatBot 
+             lessonTitle={chatLessonTitle} 
+             lessonContext={chatLessonContext} 
+             onClose={() => setShowChatBot(false)} 
+          />
+        )}
+
       </div>
     );
   }
