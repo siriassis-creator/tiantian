@@ -1,6 +1,6 @@
 // netlify/functions/gemini.js
 
-exports.handler = async function (event, context) {
+export const handler = async function (event, context) {
     // อนุญาตเฉพาะการยิงแบบ POST
     if (event.httpMethod !== 'POST') {
       return { statusCode: 405, body: 'Method Not Allowed' };
@@ -27,7 +27,7 @@ exports.handler = async function (event, context) {
         }
       };
   
-      // ยิง API ไปหา Google Gemini 1.5 Flash (ฟรีและเร็วที่สุด)
+      // ยิง API ไปหา Google Gemini 1.5 Flash
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
