@@ -1,7 +1,6 @@
 // netlify/functions/gemini.js
 
 export const handler = async function (event, context) {
-    // อนุญาตเฉพาะการยิงแบบ POST
     if (event.httpMethod !== 'POST') {
       return { statusCode: 405, body: 'Method Not Allowed' };
     }
@@ -17,18 +16,17 @@ export const handler = async function (event, context) {
         };
       }
   
-      // จัดรูปแบบข้อมูลให้ตรงกับ Gemini API
       const payload = {
         contents: messages,
         systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
         generationConfig: {
-          maxOutputTokens: 150, // จำกัดไม่ให้บอทตอบยาวเกินไป
-          temperature: 0.7,     // ความคิดสร้างสรรค์กำลังดี
+          maxOutputTokens: 200, // เพิ่มให้ตอบได้ยาวขึ้นนิดหน่อย
+          temperature: 0.5,     // ลดความเพ้อเจ้อ (0.5 คือเน้นตอบตรงคำถาม ไม่แต่งเรื่องเอง)
         }
       };
   
-      // 🎯 อัปเดต: เปลี่ยนมาใช้โมเดล gemini-3.6-flash ตามที่หน้า Dashboard ระบุ
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
+      // 🎯 ล็อกเป้าใช้ gemini-1.5-flash (เร็วและเสถียรสุดสำหรับการแชท)
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -36,7 +34,6 @@ export const handler = async function (event, context) {
   
       const data = await response.json();
   
-      // 🎯 ถ้า Error ให้พ่น Error ตัวจริงของ Google ออกมาเลย เราจะได้รู้สาเหตุ
       if (!response.ok) {
         return { statusCode: response.status, body: JSON.stringify(data) };
       }
