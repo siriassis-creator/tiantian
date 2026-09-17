@@ -20,13 +20,13 @@ export const handler = async function (event, context) {
         contents: messages,
         systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
         generationConfig: {
-          maxOutputTokens: 200, // เพิ่มให้ตอบได้ยาวขึ้นนิดหน่อย
-          temperature: 0.5,     // ลดความเพ้อเจ้อ (0.5 คือเน้นตอบตรงคำถาม ไม่แต่งเรื่องเอง)
+          maxOutputTokens: 200, 
+          temperature: 0.5,    
         }
       };
   
-      // 🎯 ล็อกเป้าใช้ gemini-1.5-flash (เร็วและเสถียรสุดสำหรับการแชท)
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      // 🎯 กลับไปใช้ gemini-3.6-flash ตามที่อาจารย์มีโควต้า
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
