@@ -1,6 +1,6 @@
 // src/OtherApp.tsx
 import React, { useState } from 'react';
-import { ArrowLeft, Play } from 'lucide-react';
+import { ArrowLeft, Play, FileText, ChevronRight, BookOpen } from 'lucide-react';
 import Settings2 from './Settings2';
 
 import LessonPattern1 from './components/LessonPattern1';
@@ -27,7 +27,7 @@ import PatternCanva from './components/PatternCanva';
 import PatternStrokeOrderRules2 from './components/PatternStrokeOrderRules2';
 import PatternFlextable2cols from './components/PatternFlextable2cols';
 import PatternFlexibleDoubleTable from './components/PatternFlexibleDoubleTable';
-import FloatingLiveText from './components/FloatingLiveText'; // +++ Import กระดานลอย +++
+import FloatingLiveText from './components/FloatingLiveText'; 
 
 import OtherPattern1 from './components/Other_pattern_1';
 import OtherClassroom from './components/Other_classroom';
@@ -85,18 +85,18 @@ interface OtherAppProps {
   setMenuNames: any;
   startPresentation: (course: any, startSectionId?: string) => void;
   saveToFirebase: (data: any[]) => void;
-  // +++ เพิ่มการรับ Props roomPin และ userRole สำหรับกระดานลอย (ถ้าในระบบหลักมีส่งมาให้) +++
   roomPin?: string | null;
   userRole?: 'teacher' | 'student';
+  appLoginRole?: 'guest' | 'teacher' | 'student' | 'admin';
+  canSeeMenu?: (menuKey: 'home' | 'other_home' | 'settings' | 'settings_other') => boolean;
 }
 
-// +++ อัปเดต: เพิ่มการรับค่า allSlides เพื่อดึงข้อมูลข้ามหน้า +++
 export function OtherSlideRenderer({ 
   slide, 
   updateNote,
   userRole = 'teacher',
   roomPin = null,
-  allSlides = [] // <--- เพิ่มตัวรับ slide ทั้งหมดของบทเรียน
+  allSlides = [] 
 }: { 
   slide: any, 
   updateNote?: (note: string) => void,
@@ -106,7 +106,6 @@ export function OtherSlideRenderer({
 }) {
   if (!slide || !slide.patternType.startsWith('other_')) return null;
   
-  // +++ ค้นหาสไลด์หน้า 5 (other_lesson5) เพื่อดึงข้อมูลตัวละคร +++
   const lesson5Slide = allSlides.find((s: any) => s.patternType === 'other_lesson5');
   const lesson5Characters = lesson5Slide ? lesson5Slide.characters : [];
 
@@ -125,7 +124,6 @@ export function OtherSlideRenderer({
           case 'other_lesson5-7': return <OtherLesson5_7 data={slide} onUpdateNote={updateNote} userRole={userRole} roomPin={roomPin} />;
           case 'other_lesson5-8': return <OtherLesson5_8 data={slide} onUpdateNote={updateNote} userRole={userRole} roomPin={roomPin} />;
           case 'other_lesson5-9': 
-             // +++ ยัดข้อมูลตัวละครเข้าไปใน prop data ให้หน้า 5-9 โดยเฉพาะ +++
              return <OtherLesson5_9 data={{ ...slide, characters: lesson5Characters }} onUpdateNote={updateNote} userRole={userRole} roomPin={roomPin} />;
           case 'other_lesson5-10': return <OtherLesson5_10 data={slide} onUpdateNote={updateNote} userRole={userRole} roomPin={roomPin} />;
           case 'other_lesson5-11': return <OtherLesson5_11 data={slide} onUpdateNote={updateNote} userRole={userRole} roomPin={roomPin} />;
@@ -163,7 +161,6 @@ export function OtherSlideRenderer({
           case 'other_lesson6-17': return <OtherLesson6_17 data={slide as any} userRole={userRole} roomPin={roomPin} />;
           case 'other_lesson6-18': return <OtherLesson6_18 data={slide as any} userRole={userRole} roomPin={roomPin} />;
 
-
           default: return null;
         }
       })()}
@@ -180,10 +177,14 @@ export default function OtherApp({
   setMenuNames,
   startPresentation,
   saveToFirebase,
-  roomPin = null, // รับค่า roomPin จาก App.tsx ถล้ามี
-  userRole = 'teacher', // รับค่า userRole จาก App.tsx ถ้ามี
+  roomPin = null, 
+  userRole = 'teacher',
+  appLoginRole,
+  canSeeMenu
 }: OtherAppProps) {
   
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+
   if (currentView === 'settings_other') {
     return (
       <div className="p-6 md:p-10 w-full relative z-10">
@@ -256,102 +257,170 @@ export default function OtherApp({
   const course = hskCards.find((c) => c.id === currentView && !c.id.startsWith('hsk'));
 
   if (course) {
-    const activeLessons =
-      course.lessons?.filter((l: any) => l.isEnabled !== false) || [];
+    const activeLessons = course.lessons?.filter((l: any) => l.isEnabled !== false) || [];
 
     return (
       <div className="p-6 md:p-10 w-full relative z-10">
-        <div className="flex items-center justify-between mb-8">
-          <button
-            onClick={() => setCurrentView('other_home')}
-            className="flex items-center text-slate-500 hover:text-emerald-600 font-medium transition-colors"
-          >
-            <ArrowLeft className="mr-2" /> กลับหน้าหลัก
-          </button>
-          
-          <button
-            onClick={() => startPresentation(course)}
-            className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-2.5 rounded-full font-bold shadow-lg hover:bg-emerald-700 transition-all active:scale-95"
-          >
-            <Play size={18} fill="currentColor" /> เริ่มสอน Slide Show (หน้าแรก)
-          </button>
-        </div>
-        <h2 className="text-4xl font-bold text-slate-700 mb-10 border-b-4 border-emerald-100 pb-4 inline-block">
-          {course.mainText} {course.level}
-        </h2>
-
-        {activeLessons.length === 0 ? (
-          <div className="bg-white/40 p-10 rounded-3xl border border-white/60 shadow-sm text-center text-slate-500">
-            ยังไม่มีบทเรียนที่เปิดแสดงผลในคอร์สนี้
-          </div>
-        ) : (
-          <div className="w-full space-y-12">
-            {activeLessons.map((lesson: any, lIdx: number) => (
-              <div
-                key={lesson.id}
-                className="w-full bg-white/40 p-4 md:p-10 rounded-3xl border border-white/60 shadow-sm relative"
+        
+        {/* ===================== โหมด 1: หน้าสารบัญ (Table of Contents) ===================== */}
+        {activeSectionId === null && (
+          <div className="animate-fade-in">
+            <div className="flex items-center justify-between mb-8">
+              <button
+                onClick={() => setCurrentView('other_home')}
+                className="flex items-center text-slate-500 hover:text-emerald-600 font-medium transition-colors"
               >
-                <h3 className="text-3xl font-bold text-emerald-700 mb-8 px-4">
-                  {lesson.titleCn ? `第 ${lesson.lessonNumber} 课: ${lesson.titleCn}` : `บทที่ ${lesson.lessonNumber}`} {' '}
-                  {lesson.titleEn && `(${lesson.titleEn})`}
-                </h3>
-                <div className="space-y-10">
-                  {lesson.sections.map((sec: any, sIdx: number) => {
-                    const updateNote = (newNote: string) => {
-                      const updated = [...hskCards];
-                      const cIdx = updated.findIndex((c) => c.id === currentView);
-                      updated[cIdx].lessons[lIdx].sections[sIdx].teacherNote = newNote;
-                      setHskCards(updated);
-                    };
-                    return (
-                      <div key={sec.id} className="w-full relative group pb-12 mb-8 border-b border-white/40 last:border-0 last:pb-0 last:mb-0">
-                        {sec.patternType === 'pattern1' && <LessonPattern1 data={{ ...sec, newWords: sec.vocabulary }} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'pattern2' && <LessonTones data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patternTone2' && <PatternTone2 data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patternSyllables' && <PatternSyllables data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patternMonosyllabic' && <PatternMonosyllabic data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patternSandhi' && <PatternSandhi data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'pattern3ColTable' && <Pattern3ColTable data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patternStrokes' && <PatternStrokes data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patternSinglecharacter' && <PatternSinglecharacter data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'neutraltone' && <PatternNeutraltone data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patternmatchpicture' && <PatternMatchPicture data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patterntonemaking' && <PatternTonemaking data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patterndialog2' && <PatternDialog2 data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patternnote' && <PatternNote data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patternsentence3cols' && <PatternSentence3Cols data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patternsentence4cols' && <PatternSentence4Cols data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patterndespicture' && <PatternDespicture data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patternpreceding' && <PatternPreceding data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patternpairwork' && <PatternPairwork data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patternflextable3cols' && <PatternFlextable3cols data={sec} onUpdateNote={updateNote} />}
-                        {sec.patternType === 'patterncanva' && <PatternCanva data={sec} />}
-                        {sec.patternType === 'patternStrokeOrderRules2' && <PatternStrokeOrderRules2 data={sec} />}
-                        {sec.patternType === 'patternFlextable2cols' && <PatternFlextable2cols data={sec} />}
-                        {sec.patternType === 'patternFlexibleDoubleTable' && <PatternFlexibleDoubleTable data={sec} />}
-                        
-                        {/* +++ ส่ง lesson.sections เข้าไปเป็น allSlides ด้วยเพื่อให้ค้นหาข้อมูลข้ามหน้าได้ +++ */}
-                        <OtherSlideRenderer slide={sec} updateNote={updateNote} allSlides={lesson.sections} userRole={userRole} roomPin={roomPin} />
+                <ArrowLeft className="mr-2" /> กลับหน้าหลักคอร์ส
+              </button>
+              
+              <button
+                onClick={() => startPresentation(course)}
+                className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-2.5 rounded-full font-bold shadow-lg hover:bg-emerald-700 transition-all active:scale-95"
+              >
+                <Play size={18} fill="currentColor" /> เริ่มสอน Slide Show (ทุกหน้า)
+              </button>
+            </div>
+            
+            <h2 className="text-4xl font-bold text-slate-700 mb-10 border-b-4 border-emerald-100 pb-4 inline-block">
+              สารบัญ: {course.mainText} {course.level}
+            </h2>
 
-                        <div className="absolute bottom-2 left-2 z-40 opacity-30 group-hover:opacity-100 transition-opacity duration-300">
-                          <button
-                            onClick={() => startPresentation(course, sec.id)}
-                            className="flex items-center gap-1.5 bg-emerald-600/90 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-md hover:scale-105 transition-all backdrop-blur-sm"
-                            title="เปิดโหมดนำเสนอเต็มจอ เริ่มที่หน้านี้"
-                          >
-                            <Play size={14} fill="currentColor" /> Slide Show
-                          </button>
-                        </div>
-
-                      </div>
-                    );
-                  })}
-                </div>
+            {activeLessons.length === 0 ? (
+              <div className="bg-white/40 p-10 rounded-3xl border border-white/60 shadow-sm text-center text-slate-500">
+                ยังไม่มีบทเรียนที่เปิดแสดงผลในคอร์สนี้
               </div>
-            ))}
+            ) : (
+              <div className="w-full space-y-12">
+                {activeLessons.map((lesson: any, lIdx: number) => (
+                  <div key={lesson.id} className="w-full">
+                    <h3 className="text-2xl font-bold text-emerald-700 mb-6 flex items-center gap-3">
+                      <BookOpen size={24} className="text-emerald-500" />
+                      {lesson.titleCn ? `第 ${lesson.lessonNumber} 课: ${lesson.titleCn}` : `บทที่ ${lesson.lessonNumber}`} 
+                      {lesson.titleEn && <span className="text-slate-500 font-normal text-xl">({lesson.titleEn})</span>}
+                    </h3>
+                    
+                    {/* ลิสต์รายการสารบัญ (Card ยาวๆ แถวละ 1 บท) */}
+                    <div className="flex flex-col gap-4">
+                      {lesson.sections.map((sec: any, sIdx: number) => {
+                        // 🎯 ดึงหัวข้อหลักและคำอธิบาย (รองรับแบบชุดที่ 1 และ 2)
+                        const title1 = sec.mainTitle || sec.mainTitle1 || sec.titleZh || sec.titleZh1;
+                        const title2 = sec.mainTitle2 || sec.titleZh2;
+                        const displayTitle = [title1, title2].filter(Boolean).join(' | ') || `เนื้อหาส่วนที่ ${sIdx + 1}`;
+
+                        const sub1 = sec.subTitle || sec.subTitle1 || sec.titleEn || sec.titleEn1;
+                        const sub2 = sec.subTitle2 || sec.titleEn2;
+                        const displaySub = [sub1, sub2].filter(Boolean).join(' | ');
+
+                        return (
+                          <div 
+                            key={sec.id}
+                            onClick={() => setActiveSectionId(sec.id)}
+                            className="w-full bg-white p-5 rounded-2xl border-2 border-slate-100 hover:border-emerald-300 shadow-sm hover:shadow-md cursor-pointer flex items-center justify-between transition-all group"
+                          >
+                            <div className="flex items-center gap-4 flex-1">
+                               <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg border border-emerald-100 shrink-0">
+                                  {sIdx + 1}
+                               </div>
+                               <div className="flex flex-col">
+                                  <h4 className="text-xl font-bold text-slate-800 mb-1 line-clamp-1 group-hover:text-emerald-700 transition-colors">
+                                     {displayTitle}
+                                  </h4>
+                                  {displaySub && (
+                                     <p className="text-sm text-slate-500 line-clamp-1">{displaySub}</p>
+                                  )}
+                               </div>
+                            </div>
+                            <div className="shrink-0 pl-4 flex items-center gap-3">
+                               <button 
+                                 onClick={(e) => { e.stopPropagation(); startPresentation(course, sec.id); }}
+                                 className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl text-sm font-bold transition-colors flex items-center gap-1.5"
+                                 title="เริ่ม Slide Show เฉพาะหน้านี้"
+                               >
+                                  <Play size={14} fill="currentColor" /> Slide
+                               </button>
+                               <div className="w-10 h-10 rounded-full bg-slate-50 group-hover:bg-emerald-500 text-slate-400 group-hover:text-white flex items-center justify-center transition-colors">
+                                  <ChevronRight size={20} />
+                               </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
-        
+
+        {/* ===================== โหมด 2: หน้าเรียนทีละบท (เปิดเฉพาะตอนคลิกจากสารบัญ) ===================== */}
+        {activeSectionId !== null && (
+          <div className="animate-fade-in w-full">
+             
+             {/* ปุ่มกลับสารบัญ */}
+             <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm sticky top-0 z-50">
+               <button
+                 onClick={() => setActiveSectionId(null)}
+                 className="flex items-center gap-2 text-slate-500 hover:text-emerald-600 font-bold bg-slate-50 hover:bg-emerald-50 px-5 py-2 rounded-xl transition-colors"
+               >
+                 <ArrowLeft size={18} /> กลับไปหน้าสารบัญ
+               </button>
+               
+               <button
+                  onClick={() => startPresentation(course, activeSectionId)}
+                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md transition-all active:scale-95"
+               >
+                  <Play size={16} fill="currentColor" /> นำเสนอหน้านี้ (Slide)
+               </button>
+             </div>
+
+             {/* หา Section ที่ถูกคลิก แล้ว Render Component */}
+             {activeLessons.map((lesson: any, lIdx: number) => 
+               lesson.sections.map((sec: any, sIdx: number) => {
+                 if (sec.id !== activeSectionId) return null; // 🎯 ซ่อนบทอื่นๆ ทั้งหมด โหลดแค่บทเดียว!
+
+                 const updateNote = (newNote: string) => {
+                   const updated = [...hskCards];
+                   const cIdx = updated.findIndex((c) => c.id === currentView);
+                   updated[cIdx].lessons[lIdx].sections[sIdx].teacherNote = newNote;
+                   setHskCards(updated);
+                 };
+
+                 return (
+                   <div key={sec.id} className="w-full">
+                     {sec.patternType === 'pattern1' && <LessonPattern1 data={{ ...sec, newWords: sec.vocabulary }} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'pattern2' && <LessonTones data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patternTone2' && <PatternTone2 data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patternSyllables' && <PatternSyllables data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patternMonosyllabic' && <PatternMonosyllabic data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patternSandhi' && <PatternSandhi data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'pattern3ColTable' && <Pattern3ColTable data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patternStrokes' && <PatternStrokes data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patternSinglecharacter' && <PatternSinglecharacter data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'neutraltone' && <PatternNeutraltone data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patternmatchpicture' && <PatternMatchPicture data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patterntonemaking' && <PatternTonemaking data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patterndialog2' && <PatternDialog2 data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patternnote' && <PatternNote data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patternsentence3cols' && <PatternSentence3Cols data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patternsentence4cols' && <PatternSentence4Cols data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patterndespicture' && <PatternDespicture data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patternpreceding' && <PatternPreceding data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patternpairwork' && <PatternPairwork data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patternflextable3cols' && <PatternFlextable3cols data={sec} onUpdateNote={updateNote} />}
+                     {sec.patternType === 'patterncanva' && <PatternCanva data={sec} />}
+                     {sec.patternType === 'patternStrokeOrderRules2' && <PatternStrokeOrderRules2 data={sec} />}
+                     {sec.patternType === 'patternFlextable2cols' && <PatternFlextable2cols data={sec} />}
+                     {sec.patternType === 'patternFlexibleDoubleTable' && <PatternFlexibleDoubleTable data={sec} />}
+                     
+                     <OtherSlideRenderer slide={sec} updateNote={updateNote} allSlides={lesson.sections} userRole={userRole} roomPin={roomPin} />
+                   </div>
+                 );
+               })
+             )}
+          </div>
+        )}
+
         {/* === กระดานคำศัพท์เสริม (Floating Board) แสดงทุกหน้าของ OtherApp === */}
         <FloatingLiveText roomPin={roomPin} userRole={userRole} />
         

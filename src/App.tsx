@@ -40,7 +40,9 @@ import {
   UserCircle,
   Lock,
   RefreshCw,
-  Key
+  Key,
+  LogOut,
+  Eye
 } from 'lucide-react';
 import { db } from './firebase';
 import { doc, setDoc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore'; 
@@ -153,12 +155,13 @@ const initialHskCards: HskCardData[] = [
 ];
 
 export default function App() {
-  const [appLoginRole, setAppLoginRole] = useState<'guest' | 'teacher' | 'student'>('guest');
+  const [appLoginRole, setAppLoginRole] = useState<'guest' | 'teacher' | 'student' | 'admin'>('guest');
   const [globalTeacherPin, setGlobalTeacherPin] = useState<string>('9999'); 
   const [globalStudentPin, setGlobalStudentPin] = useState<string>('1234');
+  const [globalAdminPin, setGlobalAdminPin] = useState<string>('8888'); 
   
   const [loginStep, setLoginStep] = useState<'role' | 'pin'>('role');
-  const [targetRole, setTargetRole] = useState<'teacher' | 'student' | null>(null); 
+  const [targetRole, setTargetRole] = useState<'teacher' | 'student' | 'admin' | null>(null); 
   const [loginPinInput, setLoginPinInput] = useState('');
 
   const [currentView, setCurrentView] = useState('home');
@@ -171,6 +174,11 @@ export default function App() {
     other_home: 'คอร์สอื่นๆ',
     settings: 'ตั้งค่า HSK',
     settings_other: 'ตั้งค่า คอร์สอื่นๆ',
+  });
+
+  const [menuVisibility, setMenuVisibility] = useState({
+    teacher: { home: true, other_home: true, settings: true, settings_other: true },
+    student: { home: true, other_home: true }
   });
 
   const [isPresenting, setIsPresenting] = useState(false);
@@ -208,6 +216,17 @@ export default function App() {
           
           const fetchedGlobalTeacherPin = docSnap.data().globalTeacherPin;
           if (fetchedGlobalTeacherPin) setGlobalTeacherPin(fetchedGlobalTeacherPin);
+
+          const fetchedGlobalAdminPin = docSnap.data().globalAdminPin;
+          if (fetchedGlobalAdminPin) setGlobalAdminPin(fetchedGlobalAdminPin);
+
+          const fetchedMenuVisibility = docSnap.data().menuVisibility;
+          if (fetchedMenuVisibility) {
+            setMenuVisibility((prev) => ({
+              teacher: { ...prev.teacher, ...fetchedMenuVisibility.teacher },
+              student: { ...prev.student, ...fetchedMenuVisibility.student }
+            }));
+          }
 
           const processedData = cloudData.map((card: any) => {
             const original = initialHskCards.find(
@@ -335,6 +354,8 @@ export default function App() {
         menuNames: menuNames, 
         globalStudentPin: globalStudentPin, 
         globalTeacherPin: globalTeacherPin, 
+        globalAdminPin: globalAdminPin,
+        menuVisibility: menuVisibility,
         lastUpdated: new Date().toISOString(),
       });
       alert('✅ บันทึกข้อมูลลง Cloud สำเร็จ!');
@@ -477,6 +498,26 @@ export default function App() {
     }, 150); 
   };
 
+  const handleLogout = () => {
+    if (window.confirm('ต้องการออกจากระบบใช่หรือไม่?')) {
+      setAppLoginRole('guest');
+      setUserRole('teacher');
+      setLoginStep('role');
+      setTargetRole(null);
+      setLoginPinInput('');
+      setCurrentView('home');
+      setIsPresenting(false);
+      setRoomPin(null);
+    }
+  };
+
+  const canSeeMenu = (menuKey: 'home' | 'other_home' | 'settings' | 'settings_other') => {
+    if (appLoginRole === 'admin') return true;
+    if (appLoginRole === 'teacher') return menuVisibility.teacher[menuKey as keyof typeof menuVisibility.teacher] ?? true;
+    if (appLoginRole === 'student') return menuVisibility.student[menuKey as keyof typeof menuVisibility.student] ?? true;
+    return false;
+  };
+
   if (loading)
     return (
       <div className="h-screen flex items-center justify-center font-bold text-indigo-600">
@@ -486,13 +527,13 @@ export default function App() {
 
   if (appLoginRole === 'guest') {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-slate-50 to-slate-200 font-sans">
+      <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-slate-50 to-slate-200 font-sans p-4">
         <div className="bg-white p-8 md:p-10 rounded-3xl shadow-2xl w-full max-w-md flex flex-col items-center transform transition-all border border-slate-100">
-          <div className="w-24 h-24 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-8 shadow-inner">
+          <div className="w-24 h-24 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-8 shadow-inner shrink-0">
             <GraduationCap size={48} strokeWidth={1.5} />
           </div>
           <h1 className="text-3xl font-black text-slate-800 mb-2">Learning Platform</h1>
-          <p className="text-slate-500 mb-10 text-center text-sm">กรุณาเลือกโหมดการใช้งานของคุณ</p>
+          <p className="text-slate-500 mb-8 text-center text-sm">กรุณาเลือกโหมดการใช้งานของคุณ</p>
 
           {loginStep === 'role' ? (
             <div className="flex flex-col w-full gap-4">
@@ -508,12 +549,18 @@ export default function App() {
               >
                 <Users size={24} /> โหมดนักเรียน (Student)
               </button>
+              <button 
+                onClick={() => { setTargetRole('admin'); setLoginStep('pin'); }}
+                className="w-full py-4 mt-2 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-2xl transition-all shadow-lg flex items-center justify-center gap-3 text-lg"
+              >
+                <Settings size={24} /> โหมดผู้ดูแลระบบ (Admin)
+              </button>
             </div>
           ) : (
             <div className="flex flex-col w-full items-center animate-fade-in">
               <div className="text-xs font-bold text-slate-400 mb-4 uppercase tracking-widest flex items-center gap-2">
                 <Lock size={14} /> 
-                {targetRole === 'teacher' ? 'รหัสผ่านสำหรับคุณครู' : 'รหัสเข้าสู่ระบบนักเรียน'}
+                {targetRole === 'teacher' ? 'รหัสผ่านสำหรับคุณครู' : targetRole === 'admin' ? 'รหัสผ่านสำหรับผู้ดูแลระบบ' : 'รหัสเข้าสู่ระบบนักเรียน'}
               </div>
               <input 
                 type="text" 
@@ -521,7 +568,9 @@ export default function App() {
                 value={loginPinInput}
                 onChange={(e) => setLoginPinInput(e.target.value.replace(/[^0-9]/g, ''))}
                 className={`w-full text-center text-4xl tracking-[0.4em] font-black p-4 border-2 rounded-2xl focus:ring-0 outline-none mb-8 text-slate-800 
-                  ${targetRole === 'teacher' ? 'border-indigo-200 focus:border-indigo-500 bg-indigo-50/50' : 'border-orange-200 focus:border-orange-500 bg-orange-50/50'}`}
+                  ${targetRole === 'teacher' ? 'border-indigo-200 focus:border-indigo-500 bg-indigo-50/50' : 
+                    targetRole === 'admin' ? 'border-slate-300 focus:border-slate-500 bg-slate-50/50' : 
+                    'border-orange-200 focus:border-orange-500 bg-orange-50/50'}`}
                 placeholder="0000"
               />
               <div className="flex w-full gap-4">
@@ -536,15 +585,23 @@ export default function App() {
                     if (targetRole === 'student' && loginPinInput === globalStudentPin) {
                       setAppLoginRole('student');
                       setUserRole('student');
+                      setCurrentView(menuVisibility.student.home ? 'home' : 'other_home');
                     } else if (targetRole === 'teacher' && loginPinInput === globalTeacherPin) {
                       setAppLoginRole('teacher');
                       setUserRole('teacher');
+                      setCurrentView(menuVisibility.teacher.home ? 'home' : 'other_home');
+                    } else if (targetRole === 'admin' && loginPinInput === globalAdminPin) {
+                      setAppLoginRole('admin');
+                      setUserRole('teacher');
+                      setCurrentView('home');
                     } else {
                       alert("❌ รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่");
                     }
                   }} 
                   className={`flex-1 py-3 text-white font-bold rounded-xl transition-colors shadow-lg
-                    ${targetRole === 'teacher' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-orange-500 hover:bg-orange-600'}`}
+                    ${targetRole === 'teacher' ? 'bg-indigo-600 hover:bg-indigo-700' : 
+                      targetRole === 'admin' ? 'bg-slate-700 hover:bg-slate-800' : 
+                      'bg-orange-500 hover:bg-orange-600'}`}
                 >
                   ปลดล็อก
                 </button>
@@ -759,7 +816,9 @@ export default function App() {
           </button>
 
           <div
-            onClick={() => setCurrentView('home')}
+            onClick={() => {
+              if (canSeeMenu('home')) setCurrentView('home');
+            }}
             className={`bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mb-8 cursor-pointer shadow-sm shrink-0 transition-all mx-auto ${
               isSidebarOpen ? 'w-full h-12 gap-3 px-4 justify-start' : 'w-12 h-12'
             }`}
@@ -769,71 +828,84 @@ export default function App() {
           </div>
 
           <nav className={`flex flex-col gap-4 w-full h-full ${isSidebarOpen ? '' : 'items-center'}`}>
-            <button
-              onClick={() => setCurrentView('home')}
-              title={menuNames.home}
-              className={`flex items-center rounded-xl transition-all ${
-                isSidebarOpen ? 'p-3 w-full justify-start gap-3' : 'p-3 justify-center'
-              } ${
-                currentView === 'home' || currentView.startsWith('hsk')
-                  ? 'bg-indigo-600 text-white shadow-lg'
-                  : 'text-gray-400 hover:bg-indigo-50'
-              }`}
-            >
-              <Home className="shrink-0" />
-              {isSidebarOpen && <span className="whitespace-nowrap overflow-hidden font-medium">{menuNames.home}</span>}
-            </button>
             
-            <button
-              onClick={() => setCurrentView('other_home')}
-              title={menuNames.other_home}
-              className={`flex items-center rounded-xl transition-all ${
-                isSidebarOpen ? 'p-3 w-full justify-start gap-3' : 'p-3 justify-center'
-              } ${
-                currentView === 'other_home' || (!currentView.startsWith('hsk') && currentView !== 'home' && currentView !== 'settings' && currentView !== 'settings_other')
-                  ? 'bg-emerald-600 text-white shadow-lg'
-                  : 'text-gray-400 hover:bg-emerald-50'
-              }`}
-            >
-              <Compass className="shrink-0" />
-              {isSidebarOpen && <span className="whitespace-nowrap overflow-hidden font-medium">{menuNames.other_home}</span>}
-            </button>
+            {/* 🎯 นำ CanSeeMenu มาครอบเมนู Home */}
+            {canSeeMenu('home') && (
+              <button
+                onClick={() => setCurrentView('home')}
+                title={menuNames.home}
+                className={`flex items-center rounded-xl transition-all ${
+                  isSidebarOpen ? 'p-3 w-full justify-start gap-3' : 'p-3 justify-center'
+                } ${
+                  currentView === 'home' || currentView.startsWith('hsk')
+                    ? 'bg-indigo-600 text-white shadow-lg'
+                    : 'text-gray-400 hover:bg-indigo-50'
+                }`}
+              >
+                <Home className="shrink-0" />
+                {isSidebarOpen && <span className="whitespace-nowrap overflow-hidden font-medium">{menuNames.home}</span>}
+              </button>
+            )}
+            
+            {/* 🎯 นำ CanSeeMenu มาครอบเมนู Other */}
+            {canSeeMenu('other_home') && (
+              <button
+                onClick={() => setCurrentView('other_home')}
+                title={menuNames.other_home}
+                className={`flex items-center rounded-xl transition-all ${
+                  isSidebarOpen ? 'p-3 w-full justify-start gap-3' : 'p-3 justify-center'
+                } ${
+                  currentView === 'other_home' || (!currentView.startsWith('hsk') && currentView !== 'home' && currentView !== 'settings' && currentView !== 'settings_other')
+                    ? 'bg-emerald-600 text-white shadow-lg'
+                    : 'text-gray-400 hover:bg-emerald-50'
+                }`}
+              >
+                <Compass className="shrink-0" />
+                {isSidebarOpen && <span className="whitespace-nowrap overflow-hidden font-medium">{menuNames.other_home}</span>}
+              </button>
+            )}
 
-            {appLoginRole === 'teacher' && (
+            {(appLoginRole === 'teacher' || appLoginRole === 'admin') && (
               <>
-                <button
-                  onClick={() => setCurrentView('settings')}
-                  title={menuNames.settings}
-                  className={`flex items-center rounded-xl transition-all ${
-                    isSidebarOpen ? 'p-3 w-full justify-start gap-3' : 'p-3 justify-center'
-                  } ${
-                    currentView === 'settings'
-                      ? 'bg-indigo-600 text-white shadow-lg'
-                      : 'text-gray-400 hover:bg-indigo-50'
-                  }`}
-                >
-                  <Settings className="shrink-0" />
-                  {isSidebarOpen && <span className="whitespace-nowrap overflow-hidden font-medium">{menuNames.settings}</span>}
-                </button>
+                {/* 🎯 นำ CanSeeMenu มาครอบเมนู Settings */}
+                {canSeeMenu('settings') && (
+                  <button
+                    onClick={() => setCurrentView('settings')}
+                    title={menuNames.settings}
+                    className={`flex items-center rounded-xl transition-all ${
+                      isSidebarOpen ? 'p-3 w-full justify-start gap-3' : 'p-3 justify-center'
+                    } ${
+                      currentView === 'settings'
+                        ? 'bg-indigo-600 text-white shadow-lg'
+                        : 'text-gray-400 hover:bg-indigo-50'
+                    }`}
+                  >
+                    <Settings className="shrink-0" />
+                    {isSidebarOpen && <span className="whitespace-nowrap overflow-hidden font-medium">{menuNames.settings}</span>}
+                  </button>
+                )}
 
-                <button
-                  onClick={() => setCurrentView('settings_other')}
-                  title={menuNames.settings_other}
-                  className={`flex items-center rounded-xl transition-all ${
-                    isSidebarOpen ? 'p-3 w-full justify-start gap-3' : 'p-3 justify-center'
-                  } ${
-                    currentView === 'settings_other'
-                      ? 'bg-emerald-600 text-white shadow-lg'
-                      : 'text-gray-400 hover:bg-emerald-50'
-                  }`}
-                >
-                  <Wrench className="shrink-0" />
-                  {isSidebarOpen && <span className="whitespace-nowrap overflow-hidden font-medium">{menuNames.settings_other}</span>}
-                </button>
+                {/* 🎯 นำ CanSeeMenu มาครอบเมนู Settings Other */}
+                {canSeeMenu('settings_other') && (
+                  <button
+                    onClick={() => setCurrentView('settings_other')}
+                    title={menuNames.settings_other}
+                    className={`flex items-center rounded-xl transition-all ${
+                      isSidebarOpen ? 'p-3 w-full justify-start gap-3' : 'p-3 justify-center'
+                    } ${
+                      currentView === 'settings_other'
+                        ? 'bg-emerald-600 text-white shadow-lg'
+                        : 'text-gray-400 hover:bg-emerald-50'
+                    }`}
+                  >
+                    <Wrench className="shrink-0" />
+                    {isSidebarOpen && <span className="whitespace-nowrap overflow-hidden font-medium">{menuNames.settings_other}</span>}
+                  </button>
+                )}
               </>
             )}
 
-            <div className="mt-auto mb-4 w-full">
+            <div className="mt-auto mb-4 w-full flex flex-col gap-3">
               <button
                 onClick={() => setShowJoinModal(true)}
                 title="เข้าร่วมชั้นเรียน"
@@ -844,12 +916,25 @@ export default function App() {
                 <Users className="shrink-0" />
                 {isSidebarOpen && <span className="whitespace-nowrap overflow-hidden font-bold">เข้าร่วมชั้นเรียน</span>}
               </button>
+
+              {/* 🎯 ย้ายปุ่ม Logout มาไว้ใน Sidebar ด้านล่างสุด */}
+              <button 
+                onClick={handleLogout}
+                title="ออกจากระบบ"
+                className={`flex items-center rounded-xl transition-all w-full ${
+                  isSidebarOpen ? 'p-3 justify-start gap-3 bg-red-50 text-red-600' : 'p-3 justify-center bg-red-50 text-red-600'
+                } hover:bg-red-100 hover:shadow-md shadow-sm`}
+              >
+                <LogOut className="shrink-0" size={24} />
+                {isSidebarOpen && <span className="whitespace-nowrap overflow-hidden font-bold">ออกจากระบบ</span>}
+              </button>
             </div>
           </nav>
         </aside>
 
         <main className="flex-1 relative overflow-y-auto w-full">
-          {currentView === 'home' && (
+
+          {currentView === 'home' && canSeeMenu('home') && (
             <div className="p-6 md:p-10 w-full relative z-10">
               <header className="mb-12">
                 <h1 className="text-4xl font-extrabold text-slate-800 tracking-tight">
@@ -902,7 +987,7 @@ export default function App() {
             </div>
           )}
 
-          {hskCards.some((c) => c.id === currentView && c.id.startsWith('hsk')) &&
+          {hskCards.some((c) => c.id === currentView && c.id.startsWith('hsk')) && canSeeMenu('home') &&
             (() => {
               const course = hskCards.find((c) => c.id === currentView);
               const activeLessons =
@@ -918,7 +1003,7 @@ export default function App() {
                       <ArrowLeft className="mr-2" /> กลับหน้าหลัก
                     </button>
                     
-                    {appLoginRole === 'teacher' && (
+                    {(appLoginRole === 'teacher' || appLoginRole === 'admin') && (
                       <button
                         onClick={() => course && startPresentation(course)}
                         className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-full font-bold shadow-lg hover:bg-indigo-700 transition-all active:scale-95"
@@ -996,11 +1081,11 @@ export default function App() {
               );
             })()}
 
-          {currentView === 'settings' && appLoginRole === 'teacher' && (
+          {currentView === 'settings' && (appLoginRole === 'teacher' || appLoginRole === 'admin') && canSeeMenu('settings') && (
             <div className="p-6 md:p-10 w-full relative z-10 flex flex-col gap-8">
               
               {/* +++ เมนูสำหรับจัดการรหัสผ่าน (แสดงเฉพาะในหน้า Settings) +++ */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 md:grid-cols-2 gap-6">
                 
                 {/* 1. จัดการรหัสคุณครู */}
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex flex-col items-center text-center gap-4">
@@ -1064,7 +1149,104 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* 3. จัดการรหัสแอดมิน */}
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex flex-col items-center text-center gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center justify-center gap-2">
+                      <Settings className="text-slate-500" /> รหัสแอดมิน (Admin)
+                    </h3>
+                    <p className="text-slate-500 text-xs">สำหรับผู้ดูแลระบบ</p>
+                  </div>
+                  <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                    <div className="text-3xl font-black tracking-widest text-slate-600 bg-white px-6 py-2 rounded-xl shadow-inner border border-slate-100">
+                      {globalAdminPin}
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+                        if (window.confirm(`ต้องการเปลี่ยนรหัสแอดมินเป็น ${newPin} ใช่หรือไม่?`)) {
+                          setGlobalAdminPin(newPin);
+                          try {
+                            await updateDoc(doc(db, 'content', 'hsk_data'), { globalAdminPin: newPin });
+                            alert('✅ อัปเดตรหัสแอดมินสำเร็จ');
+                          } catch(e) {}
+                        }
+                      }}
+                      className="p-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-colors shadow-sm"
+                      title="สุ่มรหัสผ่านใหม่"
+                    >
+                      <RefreshCw size={20} />
+                    </button>
+                  </div>
+                </div>
               </div>
+
+              {/* 🎯 4. จัดการการมองเห็นเมนู (เฉพาะ Admin) */}
+              {appLoginRole === 'admin' && (
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 col-span-1 md:col-span-2 lg:col-span-3 flex flex-col gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">
+                      <Eye className="text-blue-500" /> ตั้งค่าการมองเห็นเมนู (Menu Visibility)
+                    </h3>
+                    <p className="text-slate-500 text-xs">กำหนดว่าครูและนักเรียนจะเห็นเมนูใดบ้างที่แถบด้านซ้าย</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    {/* Teacher Visibility */}
+                    <div className="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100">
+                      <h4 className="font-bold text-indigo-700 mb-4 flex items-center gap-2"><UserCircle size={18}/> โหมดคุณครู (Teacher)</h4>
+                      <div className="flex flex-col gap-3">
+                        {[
+                          { key: 'home', label: menuNames.home },
+                          { key: 'other_home', label: menuNames.other_home },
+                          { key: 'settings', label: menuNames.settings },
+                          { key: 'settings_other', label: menuNames.settings_other }
+                        ].map(item => (
+                          <label key={item.key} className="flex items-center gap-3 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={menuVisibility.teacher[item.key as keyof typeof menuVisibility.teacher]} 
+                              onChange={async (e) => {
+                                const newVis = { ...menuVisibility, teacher: { ...menuVisibility.teacher, [item.key]: e.target.checked } };
+                                setMenuVisibility(newVis);
+                                try { await updateDoc(doc(db, 'content', 'hsk_data'), { menuVisibility: newVis }); } catch(err){}
+                              }} 
+                              className="w-5 h-5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer" 
+                            />
+                            <span className="text-slate-700 font-medium">{item.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Student Visibility */}
+                    <div className="bg-orange-50/50 p-5 rounded-2xl border border-orange-100">
+                      <h4 className="font-bold text-orange-700 mb-4 flex items-center gap-2"><Users size={18}/> โหมดนักเรียน (Student)</h4>
+                      <div className="flex flex-col gap-3">
+                        {[
+                          { key: 'home', label: menuNames.home },
+                          { key: 'other_home', label: menuNames.other_home }
+                        ].map(item => (
+                          <label key={item.key} className="flex items-center gap-3 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={menuVisibility.student[item.key as keyof typeof menuVisibility.student]} 
+                              onChange={async (e) => {
+                                const newVis = { ...menuVisibility, student: { ...menuVisibility.student, [item.key]: e.target.checked } };
+                                setMenuVisibility(newVis);
+                                try { await updateDoc(doc(db, 'content', 'hsk_data'), { menuVisibility: newVis }); } catch(err){}
+                              }} 
+                              className="w-5 h-5 text-orange-500 rounded border-slate-300 focus:ring-orange-500 cursor-pointer" 
+                            />
+                            <span className="text-slate-700 font-medium">{item.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              )}
 
               <SettingsView
                 hskCards={hskCards}
@@ -1089,6 +1271,8 @@ export default function App() {
                   saveToFirebase={saveToFirebase}
                   roomPin={roomPin}
                   userRole={userRole}
+                  appLoginRole={appLoginRole} 
+                  canSeeMenu={canSeeMenu}     
                 />
               );
             }
