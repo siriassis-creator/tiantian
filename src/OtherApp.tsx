@@ -193,28 +193,51 @@ export default function OtherApp({
   const [chatLessonTitle, setChatLessonTitle] = useState('');
   const [chatLessonContext, setChatLessonContext] = useState('');
 
-  // ฟังก์ชันดึงข้อมูลจากบทเรียนส่งให้ AI
+  // 🎯 ฟังก์ชันกวาดข้อมูลแบบครอบจักรวาล (ดึงข้อมูลให้ AI อ่านแบบไม่ตกหล่น)
   const handleOpenChatForLesson = (lesson: any) => {
     const title = lesson.titleCn ? `บทที่ ${lesson.lessonNumber}: ${lesson.titleCn}` : `บทที่ ${lesson.lessonNumber}`;
     
-    // ดึงเนื้อหาและคำศัพท์ทั้งหมดในบทนี้มารวมกันเพื่อสอน AI
     let contextData: string[] = [];
+    
     lesson.sections.forEach((sec: any) => {
-      // ดึงหัวข้อ
-      const secTitle = sec.mainTitle || sec.titleZh || '';
-      const secSub = sec.subTitle || sec.titleEn || '';
-      let textBlock = `${secTitle} ${secSub}`;
+      // 1. ดึงชื่อหัวข้อ
+      const title1 = sec.mainTitle || sec.mainTitle1 || sec.titleZh || sec.titleZh1 || '';
+      const title2 = sec.mainTitle2 || sec.titleZh2 || '';
+      const sub1 = sec.subTitle || sec.subTitle1 || sec.titleEn || sec.titleEn1 || '';
+      const sub2 = sec.subTitle2 || sec.titleEn2 || '';
+      let textBlock = `[หัวข้อ: ${title1} ${title2} ${sub1} ${sub2}]`.trim();
 
-      // ดึงคำศัพท์ถ้ามีในหน้านั้น
-      if (sec.vocabulary && Array.isArray(sec.vocabulary)) {
-        const vocabStr = sec.vocabulary.map((v:any) => `${v.word} (${v.pinyin}) = ${v.translation}`).join(', ');
-        textBlock += ` [คำศัพท์ที่เรียน: ${vocabStr}]`;
+      // 2. ดึงคำศัพท์ (กวาดจากทุกชื่อตัวแปรที่เป็นไปได้)
+      const vocabList = sec.vocabulary || sec.words || sec.newWords || sec.characters || sec.data || [];
+      if (Array.isArray(vocabList) && vocabList.length > 0) {
+        const words = vocabList.map((v:any) => {
+          const zh = v.word || v.character || v.zh || v.text || v.hanzi || '';
+          const py = v.pinyin || v.py || '';
+          const th = v.translation || v.meaning || v.th || v.en || '';
+          if (!zh) return '';
+          return `${zh} (${py}) = ${th}`;
+        }).filter(Boolean).join(', ');
+        
+        if (words) textBlock += ` [คำศัพท์: ${words}]`;
+      }
+
+      // 3. ดึงประโยค / บทสนทนา
+      const sentenceList = sec.sentences || sec.dialogue || sec.dialogues || [];
+      if (Array.isArray(sentenceList) && sentenceList.length > 0) {
+        const sentences = sentenceList.map((s:any) => {
+          const zh = s.zh || s.sentence || s.text || s.character || '';
+          const py = s.pinyin || s.py || '';
+          const th = s.th || s.translation || s.meaning || s.en || '';
+          if (!zh) return '';
+          return `${zh} (${py}) = ${th}`;
+        }).filter(Boolean).join(' | ');
+        
+        if (sentences) textBlock += ` [ประโยค: ${sentences}]`;
       }
       
-      // ดึงเนื้อหาบทความถ้ามี
-      if (sec.content) {
-        textBlock += ` [เนื้อหา: ${sec.content}]`;
-      }
+      // 4. ดึงเนื้อหาแบบความเรียงยาวๆ
+      if (sec.content) textBlock += ` [เนื้อหา: ${sec.content}]`;
+      if (sec.text && typeof sec.text === 'string') textBlock += ` [ข้อความ: ${sec.text}]`;
 
       if (textBlock.trim()) {
         contextData.push(textBlock.trim());
@@ -222,7 +245,8 @@ export default function OtherApp({
     });
 
     setChatLessonTitle(title);
-    setChatLessonContext(contextData.join(' | ').substring(0, 2000)); // ส่งไปให้ AI ไม่เกิน 2000 ตัวอักษร
+    // เพิ่มลิมิตการส่งตัวอักษรให้เยอะขึ้น เผื่อบทเรียนยาวมาก (ส่งได้เป็นหมื่นตัวอักษร)
+    setChatLessonContext(contextData.join('\n').substring(0, 15000)); 
     setShowChatBot(true);
   };
 
@@ -355,7 +379,6 @@ export default function OtherApp({
                     {/* ลิสต์รายการสารบัญ (Card ยาวๆ แถวละ 1 บท) */}
                     <div className="flex flex-col gap-4">
                       {lesson.sections.map((sec: any, sIdx: number) => {
-                        // 🎯 ดึงข้อมูล Header แบบที่สั่ง: 1.จีน 2.ไทย
                         const title1 = sec.mainTitle || sec.mainTitle1 || sec.titleZh || sec.titleZh1;
                         const title2 = sec.mainTitle2 || sec.titleZh2;
                         const displayTitle = [title1, title2].filter(Boolean).join(' | ') || `เนื้อหาส่วนที่ ${sIdx + 1}`;
@@ -375,11 +398,9 @@ export default function OtherApp({
                                   {sIdx + 1}
                                </div>
                                <div className="flex flex-col">
-                                  {/* บรรทัด 1: หัวข้อหลัก (จีน) */}
                                   <h4 className="text-xl font-bold text-slate-800 mb-1 line-clamp-1 group-hover:text-emerald-700 transition-colors">
                                      {displayTitle}
                                   </h4>
-                                  {/* บรรทัด 2: คำอธิบาย (ไทย) */}
                                   {displaySub && (
                                      <p className="text-sm text-slate-500 line-clamp-1">{displaySub}</p>
                                   )}
@@ -479,7 +500,7 @@ export default function OtherApp({
         {/* === กระดานคำศัพท์เสริม (Floating Board) แสดงทุกหน้าของ OtherApp === */}
         <FloatingLiveText roomPin={roomPin} userRole={userRole} />
         
-        {/* === 🤖 AI ChatBot (จะแสดงเมื่อกดปุ่ม "ทบทวนกับ AI ติวเตอร์") === */}
+        {/* === 🤖 AI ChatBot === */}
         {showChatBot && (
           <ChatBot 
              lessonTitle={chatLessonTitle} 
