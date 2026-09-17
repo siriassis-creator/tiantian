@@ -26,17 +26,17 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
 
   useEffect(() => {
     setMessages([
-      { role: 'model', parts: [{ text: `สวัสดีครับ! วันนี้เรามาทบทวนบทเรียน "${lessonTitle}" กันเถอะ มีคำศัพท์หรือประโยคไหนที่อยากให้เหล่าซือช่วยอธิบายไหมครับ? พิมพ์หรือกดไมค์พูดมาได้เลย!` }] }
+      { role: 'model', parts: [{ text: `สวัสดีครับ! วันนี้เรามาทบทวนบทเรียน "${lessonTitle}" กันเถอะ มีคำศัพท์หรือประโยคไหนในบทนี้ที่อยากให้เหล่าซือช่วยอธิบายไหมครับ?` }] }
     ]);
   }, [lessonTitle]);
 
   const speak = (text: string) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
-      // ลบวงเล็บและตัวอักษรพิเศษออกก่อนอ่าน จะได้ไม่อ่านเครื่องหมาย
-      const cleanText = text.replace(/[\[\]\(\)]/g, ''); 
+      // ลบวงเล็บและสัญลักษณ์ออกก่อนอ่าน เพื่อให้อ่านออกเสียงเฉพาะคำพูด
+      const cleanText = text.replace(/[\[\]\(\)\-\*]/g, ''); 
       const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = 'zh-CN'; // เน้นสำเนียงจีน
+      utterance.lang = 'zh-CN'; 
       utterance.rate = 0.9;
       window.speechSynthesis.speak(utterance);
     }
@@ -47,26 +47,30 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
 
     const newUserMsg: Message = { role: 'user', parts: [{ text: textToSend }] };
     
-    // ตัดข้อความแรกของบอทออก เพื่อไม่ให้ผิดกฎของ API
+    // ดึงประวัติการคุย โดยจำแค่ 6 ประโยคล่าสุดเพื่อไม่ให้กินโควต้า
     const historyToKeep = messages.filter((msg, idx) => !(idx === 0 && msg.role === 'model'));
-    const newHistoryForApi = [...historyToKeep, newUserMsg].slice(-6); // จำประวัติแค่ 6 ประโยคล่าสุด
+    const newHistoryForApi = [...historyToKeep, newUserMsg].slice(-6);
 
     setMessages((prev) => [...prev, newUserMsg]);
     setInputText('');
     setIsLoading(true);
 
-    // 🎯 จูนสมอง AI ใหม่ ให้ตอบเป๊ะๆ ไม่หลอน
+    // 🎯 ตีกรอบสมอง AI ให้ทำงานร่วมกับ Database ของเราแบบ 100%
     const systemInstruction = `
-      คุณคือ "AI เหล่าซือ" ครูสอนภาษาจีนที่เชี่ยวชาญ ใจดี และตอบคำถามเก่งมาก
-      เนื้อหาที่นักเรียนกำลังเรียน: ${lessonTitle}
-      คำศัพท์และบริบทในบทเรียน: ${lessonContext}
+      คุณคือ "AI เหล่าซือ" ครูสอนภาษาจีน
+      คุณมีหน้าที่ตอบคำถามและช่วยนักเรียนทบทวนบทเรียน โดยอ้างอิงจากฐานข้อมูล (Database) ด้านล่างนี้เท่านั้น:
       
-      กฎเหล็กของคุณ (ต้องทำตามอย่างเคร่งครัด):
-      1. ถ้านักเรียนถามคำศัพท์หรือการเขียน ให้ตอบในรูปแบบนี้เสมอ: "คำแปล (อักษรจีน / pinyin)" เช่น "100 หยวน เขียนว่า 一百元 (yī bǎi yuán)"
-      2. ใช้ภาษาไทยเป็นหลักในการอธิบายให้เข้าใจง่าย สั้น กระชับ ไม่เกิน 3-4 บรรทัด
-      3. ห้ามพิมพ์สัญลักษณ์แปลกๆ ห้ามใช้ Markdown ซับซ้อน และห้ามพิมพ์โค้ดคอมพิวเตอร์เด็ดขาด
-      4. หลังจากตอบคำถามเสร็จ ให้ชวนนักเรียนคุยต่อ หรือให้ลองแต่งประโยคที่เกี่ยวกับ "${lessonTitle}"
-      5. ถ้านักเรียนพิมพ์ภาษาจีนมาผิด ให้กล่าวชมความพยายามก่อน แล้วค่อยแก้ไขให้ถูกต้องอย่างสุภาพ
+      --- DATABASE บทเรียน ---
+      หัวข้อที่เรียน: ${lessonTitle}
+      เนื้อหาและคำศัพท์ทั้งหมดที่มีในบทนี้: ${lessonContext}
+      ------------------------
+      
+      คำสั่งที่ต้องทำตามอย่างเคร่งครัด (ห้ามละเมิด):
+      1. ดึงข้อมูลจาก DATABASE เพื่อมาตอบนักเรียน ห้ามแต่งคำศัพท์หรือเนื้อหาขึ้นมาเอง
+      2. ถ้านักเรียนถามถึงคำศัพท์ หรือเนื้อหาที่ "ไม่มีใน DATABASE" ให้ตอบปฏิเสธอย่างสุภาพ เช่น "เนื้อหานี้ไม่มีในบทเรียนนี้นะคะ ลองถามเนื้อหาที่อยู่ในบทเรียนดูนะ"
+      3. หากนักเรียนให้สรุปเนื้อหา ให้สรุปเฉพาะเนื้อหาที่มีใน DATABASE เท่านั้น
+      4. ตอบคำถามแบบผู้สนทนา ห้ามพิมพ์ทวนคำถามของนักเรียนเด็ดขาด
+      5. ใช้ภาษาไทยอธิบายให้เข้าใจง่าย สอดแทรกอักษรจีนและพินอิน (Pinyin) ที่ถูกต้องเสมอ
     `;
 
     try {
@@ -84,9 +88,12 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
         setMessages((prev) => [...prev, { role: 'model', parts: [{ text: data.reply }] }]);
       } else {
         const errorDetail = typeof data.error === 'object' ? JSON.stringify(data.error) : data.error;
+        // ถ้ายิง API ไม่ผ่าน ให้ลบข้อความ user อันล่าสุดออก จะได้ไม่บั๊กในรอบถัดไป
+        setMessages((prev) => prev.slice(0, -1));
         alert('ระบบ AI ขัดข้องชั่วคราว: ' + (errorDetail || 'ไม่ทราบสาเหตุ'));
       }
     } catch (err) {
+      setMessages((prev) => prev.slice(0, -1));
       alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ AI ได้');
     } finally {
       setIsLoading(false);
@@ -98,7 +105,7 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
     if (!SpeechRecognition) return alert('เบราว์เซอร์ของคุณไม่รองรับการพิมพ์ด้วยเสียง (แนะนำให้ใช้ Chrome Safari หรือ Edge)');
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'zh-CN'; // โฟกัสการจับเสียงภาษาจีน
+    recognition.lang = 'zh-CN'; 
     recognition.interimResults = false;
 
     recognition.onstart = () => setIsListening(true);
