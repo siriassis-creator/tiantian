@@ -76,7 +76,6 @@ import OtherLesson6_16 from './components/Other_lesson6-16';
 import OtherLesson6_17 from './components/Other_lesson6-17';
 import OtherLesson6_18 from './components/Other_lesson6-18';
 
-// +++ Import AI ChatBot ที่เราสร้างไว้ +++
 import ChatBot from './components/ChatBot';
 
 interface OtherAppProps {
@@ -246,7 +245,7 @@ export default function OtherApp({
 
     setChatLessonTitle(title);
     
-    // 🎯 เพิ่มระบบ Clean ข้อมูลก่อนส่งให้ AI เพื่อป้องกัน JSON พังจากอักขระพิเศษ
+    // 🎯 ระบบ Clean ข้อมูลก่อนส่งให้ AI เพื่อป้องกัน JSON พังจากอักขระพิเศษ
     let safeContext = contextData.join(' | '); 
     safeContext = safeContext.replace(/[\"\'\\]/g, ""); // ลบเครื่องหมายคำพูดและ backslash
     safeContext = safeContext.replace(/\n/g, " ");    // เปลี่ยนการขึ้นบรรทัดใหม่เป็นช่องว่าง
@@ -254,6 +253,7 @@ export default function OtherApp({
 
     setChatLessonContext(safeContext); 
     setShowChatBot(true);
+  };
 
   if (currentView === 'settings_other') {
     return (
