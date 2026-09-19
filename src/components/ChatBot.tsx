@@ -1,6 +1,6 @@
 // src/components/ChatBot.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Mic, Volume2, X, Loader2, Bot } from 'lucide-react';
+import { Send, Mic, Volume2, X, Loader2, Bot, Cpu } from 'lucide-react';
 
 interface ChatBotProps {
   lessonTitle: string;
@@ -20,6 +20,9 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
   const [isListening, setIsListening] = useState(false);
   const [micLang, setMicLang] = useState<'th-TH' | 'zh-CN'>('th-TH'); 
   
+  // 🎯 เพิ่ม Cloudflare เป็นตัวเลือก
+  const [selectedProvider, setSelectedProvider] = useState<'gemini' | 'chatgpt' | 'groq' | 'cloudflare'>('gemini');
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,7 +30,6 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
   }, [messages]);
 
   useEffect(() => {
-    // 🎯 จำลองข้อความแรกให้อยู่ในฟอร์แมต JSON เพื่อให้ระบบอ่านได้
     const initialJson = JSON.stringify({
       message: `สวัสดีครับ! วันนี้เรามาทบทวนบทเรียน "${lessonTitle}" กันเถอะ มีคำศัพท์หรือประโยคไหนในบทนี้ที่อยากให้เหล่าซือช่วยอธิบายไหมครับ? กดไมค์พูดถามมาได้เลยนะ!`,
       vocabularies: []
@@ -37,7 +39,6 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
     ]);
   }, [lessonTitle]);
 
-  // 🎯 ฟังก์ชันอ่านเสียง เลือกระบุภาษาได้
   const speak = (text: string, lang: 'zh-CN' | 'th-TH') => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -60,7 +61,6 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
     setInputText('');
     setIsLoading(true);
 
-    // 🎯 สั่ง AI ให้ตอบกลับเป็น JSON ตามโครงสร้างที่อาจารย์ต้องการเป๊ะๆ
     const systemInstruction = `
       คุณคือ "AI เหล่าซือ" ครูสอนภาษาจีน
       หน้าทึ่: พูดคุยและดึงข้อมูลจาก DATABASE มาอธิบายนักเรียน
@@ -77,8 +77,8 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
         "message": "ข้อความอธิบาย พูดคุย หรือสรุปบทเรียน (ภาษาไทยล้วน ไม่มีสัญลักษณ์)",
         "vocabularies": [
           {
-            "meaning": "คำศัพท์จากบทเรียน (ความหมายภาษาไทย)",
-            "reading": "คำอ่านภาษาไทย (เช่น เจ้อ คว้าย เซี่ยงพี)",
+            "meaning": "คำแปล",
+            "reading": "คำอ่านภาษาไทย",
             "pinyin": "พินอิน (Pinyin)",
             "chinese": "การเขียน (อักษรจีน)",
             "example_cn": "ประโยคตัวอย่างภาษาจีน",
@@ -87,7 +87,6 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
         ]
       }
       3. หากคำถามเป็นการทักทาย หรือไม่ได้ถามหาคำศัพท์ ให้ใส่ vocabularies เป็นก้อน array ว่าง []
-      4. ถ้าข้อมูลที่นักเรียนถามไม่มีใน DATABASE ให้พยายามโยงเข้าหาเนื้อหาใน DATABASE แบบเนียนๆ
     `;
 
     try {
@@ -96,7 +95,8 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newHistoryForApi,
-          systemInstruction: systemInstruction
+          systemInstruction: systemInstruction,
+          provider: selectedProvider // ส่งบอก Backend ว่าเลือกตัวไหน
         })
       });
 
@@ -106,7 +106,7 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
       } else {
         const errorDetail = typeof data.error === 'object' ? JSON.stringify(data.error) : data.error;
         setMessages((prev) => prev.slice(0, -1));
-        alert('ระบบ AI ขัดข้อง: ' + (errorDetail || 'ไม่ทราบสาเหตุ'));
+        alert(`AI (${selectedProvider}) แจ้งข้อผิดพลาด: ` + (errorDetail || 'ไม่ทราบสาเหตุ'));
       }
     } catch (err) {
       setMessages((prev) => prev.slice(0, -1));
@@ -136,44 +136,44 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
     recognition.start();
   };
 
-  // 🎯 ฟังก์ชันแยกสำหรับ Render กล่องข้อความ AI จาก JSON
   const renderModelMessage = (text: string) => {
     try {
-      const parsed = JSON.parse(text);
+      // พยายามแปลง JSON บางครั้ง AI อาจจะใส่ markdown ```json มาคลุม
+      const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanText);
+      
       return (
         <div className="flex flex-col gap-3 w-full">
-          {/* ข้อความอธิบายหลัก */}
           {parsed.message && (
             <div className="bg-white text-slate-700 border border-slate-200 rounded-2xl rounded-tl-none p-3 shadow-sm">
               <p className="text-sm leading-relaxed">{parsed.message}</p>
               <button 
                 onClick={() => speak(parsed.message, 'th-TH')} 
-                className="mt-2 text-indigo-500 hover:text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold transition-colors"
+                className="mt-2 text-indigo-500 hover:text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold transition-colors w-max"
               >
-                <Volume2 size={14} /> ฟังข้อความนี้
+                <Volume2 size={14} /> ฟัง
               </button>
             </div>
           )}
 
-          {/* การ์ดคำศัพท์ (แยกตามโครงสร้างที่อาจารย์ขอ) */}
           {parsed.vocabularies && parsed.vocabularies.length > 0 && (
             <div className="flex flex-col gap-2">
               {parsed.vocabularies.map((v: any, i: number) => (
-                <div key={i} className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 shadow-sm text-sm font-sans w-full max-w-[90%]">
+                <div key={i} className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 shadow-sm text-sm font-sans w-full max-w-[95%]">
                   <div className="font-bold text-emerald-800 mb-2 border-b border-emerald-200/50 pb-1">
                     📖 {v.meaning}
                   </div>
-                  <div className="grid grid-cols-[80px_1fr] gap-y-2 gap-x-2 text-xs items-center">
+                  <div className="grid grid-cols-[60px_1fr] gap-y-2 gap-x-2 text-xs items-center">
                     <div className="text-slate-500 font-semibold">การอ่าน:</div>
                     <div className="text-slate-700">{v.reading}</div>
                     
                     <div className="text-slate-500 font-semibold">Pinyin:</div>
                     <div className="text-slate-700">{v.pinyin}</div>
                     
-                    <div className="text-slate-500 font-semibold mt-1">การเขียน:</div>
+                    <div className="text-slate-500 font-semibold mt-1">เขียน:</div>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-lg font-bold text-slate-800 leading-none">{v.chinese}</span>
-                      <button onClick={() => speak(v.chinese, 'zh-CN')} className="text-emerald-600 hover:text-emerald-800 bg-emerald-100 p-1 rounded-full" title="ฟังเสียงจีน">
+                      <button onClick={() => speak(v.chinese, 'zh-CN')} className="text-emerald-600 hover:text-emerald-800 bg-emerald-100 p-1 rounded-full">
                         <Volume2 size={14} />
                       </button>
                     </div>
@@ -181,14 +181,14 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
 
                   {(v.example_cn || v.example_th) && (
                     <div className="mt-3 pt-2 border-t border-emerald-200/50">
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase mb-1">ตัวอย่างการใช้งาน</div>
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase mb-1">ตัวอย่าง</div>
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex flex-col">
                           <span className="font-medium text-slate-800">{v.example_cn}</span>
                           <span className="text-slate-500 text-xs mt-0.5">{v.example_th}</span>
                         </div>
                         {v.example_cn && (
-                          <button onClick={() => speak(v.example_cn, 'zh-CN')} className="text-indigo-500 hover:text-indigo-700 bg-indigo-50 p-1.5 rounded-full shrink-0 mt-0.5" title="ฟังเสียงตัวอย่าง">
+                          <button onClick={() => speak(v.example_cn, 'zh-CN')} className="text-indigo-500 hover:text-indigo-700 bg-indigo-50 p-1.5 rounded-full shrink-0 mt-0.5">
                             <Volume2 size={14} />
                           </button>
                         )}
@@ -202,7 +202,6 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
         </div>
       );
     } catch (e) {
-      // เผื่อ AI ตอบผิดฟอร์แมต ให้แสดงเป็นข้อความธรรมดา
       return (
         <div className="bg-white text-slate-700 border border-slate-200 rounded-2xl rounded-tl-none p-3 shadow-sm">
           <p className="text-sm">{text}</p>
@@ -212,15 +211,31 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
   };
 
   return (
-    <div className="fixed bottom-6 right-6 w-[420px] h-[550px] bg-slate-50 rounded-3xl shadow-2xl border border-slate-200 flex flex-col z-[9999] overflow-hidden">
-      <div className="bg-emerald-600 text-white p-4 flex items-center justify-between shadow-md z-10">
-        <div className="flex items-center gap-2">
-          <Bot size={24} />
-          <h3 className="font-bold">AI ติวเตอร์ภาษาจีน</h3>
+    <div className="fixed bottom-6 right-6 w-[420px] h-[580px] bg-slate-50 rounded-3xl shadow-2xl border border-slate-200 flex flex-col z-[9999] overflow-hidden">
+      
+      <div className="bg-emerald-600 text-white p-3 flex flex-col gap-2 shadow-md z-10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bot size={22} />
+            <h3 className="font-bold text-sm">AI ติวเตอร์ภาษาจีน</h3>
+          </div>
+          <button onClick={onClose} className="hover:bg-emerald-500 p-1 rounded-lg transition-colors">
+            <X size={18} />
+          </button>
         </div>
-        <button onClick={onClose} className="hover:bg-emerald-500 p-1 rounded-lg transition-colors">
-          <X size={20} />
-        </button>
+        <div className="flex items-center gap-2 text-xs bg-emerald-700/50 p-1.5 rounded-lg border border-emerald-500/50">
+          <Cpu size={14} className="text-emerald-200" />
+          <select 
+            value={selectedProvider}
+            onChange={(e) => setSelectedProvider(e.target.value as any)}
+            className="bg-transparent border-none text-white outline-none w-full cursor-pointer font-medium"
+          >
+            <option value="gemini" className="text-slate-800">✨ Google Gemini (ฟรี)</option>
+            <option value="groq" className="text-slate-800">⚡ Llama-3 by Groq (ฟรี/เร็วมาก)</option>
+            <option value="cloudflare" className="text-slate-800">☁️ Cloudflare AI (Llama-3)</option>
+            <option value="chatgpt" className="text-slate-800">🤖 ChatGPT (ต้องเติมเงิน API)</option>
+          </select>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -238,7 +253,7 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
         {isLoading && (
           <div className="flex justify-start">
             <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2 border border-slate-200 text-slate-500 text-sm">
-              <Loader2 className="animate-spin w-4 h-4 text-emerald-500" /> เหล่าซือกำลังค้นหาข้อมูล...
+              <Loader2 className="animate-spin w-4 h-4 text-emerald-500" /> {selectedProvider} กำลังคิด...
             </div>
           </div>
         )}
@@ -250,15 +265,14 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
           onClick={() => setMicLang(prev => prev === 'th-TH' ? 'zh-CN' : 'th-TH')}
           className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-2 rounded-xl hover:bg-slate-200 transition-colors flex-shrink-0"
         >
-          {micLang === 'th-TH' ? '🇹🇭 พิมพ์/พูดไทย' : '🇨🇳 พูดจีน'}
+          {micLang === 'th-TH' ? '🇹🇭 พูดไทย' : '🇨🇳 พูดจีน'}
         </button>
 
         <button 
           onClick={toggleListen}
           className={`p-3 rounded-full flex-shrink-0 transition-all shadow-sm ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-          title="กดเพื่อพูด"
         >
-          <Mic size={20} />
+          <Mic size={18} />
         </button>
         <input 
           type="text"
@@ -266,14 +280,14 @@ export default function ChatBot({ lessonTitle, lessonContext, onClose }: ChatBot
           onChange={e => setInputText(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSend(inputText)}
           placeholder="พิมพ์ถามเหล่าซือ..."
-          className="flex-1 bg-slate-100 border-none rounded-full px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none w-full"
+          className="flex-1 bg-slate-100 border-none rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none w-full"
         />
         <button 
           onClick={() => handleSend(inputText)}
           disabled={!inputText.trim() || isLoading}
           className="p-3 bg-emerald-600 text-white rounded-full flex-shrink-0 hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-sm"
         >
-          <Send size={20} />
+          <Send size={18} />
         </button>
       </div>
     </div>
