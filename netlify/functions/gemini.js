@@ -20,12 +20,12 @@ export const handler = async function (event, context) {
       contents: messages,
       systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
       generationConfig: {
-        maxOutputTokens: 2048, // 🎯 แก้ตรงนี้! เพิ่มให้เยอะขึ้น ภาษาไทยจะได้ไม่โดนตัดจบกลางประโยค
-        temperature: 0.6,    
+        maxOutputTokens: 2048, 
+        temperature: 0.4,    // ลดความเพ้อเจ้อ ให้อิง Database
+        responseMimeType: "application/json" // 🎯 บังคับให้ AI ตอบเป็น JSON เท่านั้น!
       }
     };
 
-    // ใช้ gemini-3.6-flash ตามที่อาจารย์ระบุ
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
