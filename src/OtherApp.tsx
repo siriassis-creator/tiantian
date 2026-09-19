@@ -245,10 +245,15 @@ export default function OtherApp({
     });
 
     setChatLessonTitle(title);
-    // เพิ่มลิมิตการส่งตัวอักษรให้เยอะขึ้น เผื่อบทเรียนยาวมาก (ส่งได้เป็นหมื่นตัวอักษร)
-    setChatLessonContext(contextData.join('\n').substring(0, 15000)); 
+    
+    // 🎯 เพิ่มระบบ Clean ข้อมูลก่อนส่งให้ AI เพื่อป้องกัน JSON พังจากอักขระพิเศษ
+    let safeContext = contextData.join(' | '); 
+    safeContext = safeContext.replace(/[\"\'\\]/g, ""); // ลบเครื่องหมายคำพูดและ backslash
+    safeContext = safeContext.replace(/\n/g, " ");    // เปลี่ยนการขึ้นบรรทัดใหม่เป็นช่องว่าง
+    safeContext = safeContext.substring(0, 15000);    // ตัดความยาวไม่ให้เกิน limit
+
+    setChatLessonContext(safeContext); 
     setShowChatBot(true);
-  };
 
   if (currentView === 'settings_other') {
     return (
