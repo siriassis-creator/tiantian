@@ -12,8 +12,6 @@ export const handler = async function (event, context) {
     const geminiKey = process.env.GEMINI_API_KEY;
     const openaiKey = process.env.OPENAI_API_KEY;
     const groqKey = process.env.GROQ_API_KEY;
-    
-    // 🎯 ของ Cloudflare ต้องใช้คู่กัน
     const cfAccountId = process.env.CLOUDFLARE_ACCOUNT_ID; 
     const cfToken = process.env.CLOUDFLARE_API_TOKEN;
 
@@ -29,7 +27,10 @@ export const handler = async function (event, context) {
         generationConfig: { maxOutputTokens: 2048, temperature: 0.4, responseMimeType: "application/json" }
       };
 
-      const response = await fetch(`[https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$](https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$){geminiKey}`, {
+      // 🎯 หั่น URL เป็นท่อนๆ เพื่อป้องกันบั๊กจากการก๊อปปี้โค้ดแล้วกลายเป็นลิงก์
+      const apiUrl = "https://" + "generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + geminiKey;
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -55,7 +56,11 @@ export const handler = async function (event, context) {
 
       formattedMessages.unshift({ role: 'system', content: systemInstruction + "\nRespond strictly in valid JSON." });
 
-      const apiUrl = isGpt ? "[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)" : "[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)";
+      // 🎯 หั่น URL ป้องกันบั๊กลิงก์เช่นกัน
+      const urlOpenAI = "https://" + "api.openai.com/v1/chat/completions";
+      const urlGroq = "https://" + "api.groq.com/openai/v1/chat/completions";
+      const apiUrl = isGpt ? urlOpenAI : urlGroq;
+      
       const modelName = isGpt ? "gpt-4o-mini" : "llama3-70b-8192";
 
       const response = await fetch(apiUrl, {
@@ -86,18 +91,17 @@ export const handler = async function (event, context) {
         return { statusCode: 500, body: JSON.stringify({ error: 'ไม่พบ CLOUDFLARE_ACCOUNT_ID หรือ CLOUDFLARE_API_TOKEN' }) };
       }
 
-      // Cloudflare ก็รองรับรูปแบบ OpenAI Message Structure
       const formattedMessages = messages.map(m => ({
         role: m.role === 'model' ? 'assistant' : 'user',
         content: m.parts[0].text
       }));
 
-      // บังคับ Cloudflare ให้ตอบเป็น JSON
       formattedMessages.unshift({ role: 'system', content: systemInstruction + "\nIMPORTANT: You must respond ONLY with a valid JSON object. Do not include markdown formatting or any conversational text outside the JSON object." });
 
-      // ใช้โมเดล Llama 3 8B ของ Cloudflare (เบา เร็ว และฟรี)
       const model = "@cf/meta/llama-3-8b-instruct";
-      const apiUrl = `[https://api.cloudflare.com/client/v4/accounts/$](https://api.cloudflare.com/client/v4/accounts/$){cfAccountId}/ai/run/${model}`;
+      
+      // 🎯 หั่น URL ป้องกันบั๊กลิงก์
+      const apiUrl = "https://" + "api.cloudflare.com/client/v4/accounts/" + cfAccountId + "/ai/run/" + model;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -116,7 +120,6 @@ export const handler = async function (event, context) {
          throw new Error(JSON.stringify(data.errors || data));
       }
 
-      // Cloudflare จะคืนผลลัพธ์มาใน data.result.response
       return { statusCode: 200, body: JSON.stringify({ reply: data.result.response }) };
     }
 
