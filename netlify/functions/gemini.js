@@ -28,6 +28,7 @@ export const handler = async function (event, context) {
       };
 
       // 🎯 หั่น URL เป็นท่อนๆ เพื่อป้องกันบั๊กจากการก๊อปปี้โค้ดแล้วกลายเป็นลิงก์
+      // ใช้โมเดล gemini-3.6-flash ตามข้อมูลล่าสุด
       const apiUrl = "https://" + "generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + geminiKey;
 
       const response = await fetch(apiUrl, {
@@ -56,12 +57,13 @@ export const handler = async function (event, context) {
 
       formattedMessages.unshift({ role: 'system', content: systemInstruction + "\nRespond strictly in valid JSON." });
 
-      // 🎯 หั่น URL ป้องกันบั๊กลิงก์เช่นกัน
+      // 🎯 หั่น URL ป้องกันบั๊กลิงก์
       const urlOpenAI = "https://" + "api.openai.com/v1/chat/completions";
       const urlGroq = "https://" + "api.groq.com/openai/v1/chat/completions";
       const apiUrl = isGpt ? urlOpenAI : urlGroq;
       
-      const modelName = isGpt ? "gpt-4o-mini" : "llama3-70b-8192";
+      // 🎯 อัปเดตชื่อโมเดลให้เป็นเวอร์ชันล่าสุด
+      const modelName = isGpt ? "gpt-4o-mini" : "llama-3.3-70b-versatile";
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -98,7 +100,8 @@ export const handler = async function (event, context) {
 
       formattedMessages.unshift({ role: 'system', content: systemInstruction + "\nIMPORTANT: You must respond ONLY with a valid JSON object. Do not include markdown formatting or any conversational text outside the JSON object." });
 
-      const model = "@cf/meta/llama-3-8b-instruct";
+      // 🎯 อัปเดตโมเดลเป็นรุ่น Llama 3.1 Fast
+      const model = "@cf/meta/llama-3.1-8b-instruct-fast";
       
       // 🎯 หั่น URL ป้องกันบั๊กลิงก์
       const apiUrl = "https://" + "api.cloudflare.com/client/v4/accounts/" + cfAccountId + "/ai/run/" + model;
